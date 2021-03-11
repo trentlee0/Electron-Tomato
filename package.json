@@ -1,0 +1,16 @@
+{
+  "name": "pomodoro-technique-app",
+  "version": "0.0.1",
+  "description": "番茄时钟",
+  "main": "main.js",
+  "author": "Trent0",
+  "license": "ISC",
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "package": "electron-packager . 番茄时钟 --out ./out --icon=./img/icon.ico --arch=x64 --overwrite --ignore=node_modules"
+  },
+  "devDependencies": {
+    "electron": "^12.0.0"
+  }
+}
