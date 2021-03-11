@@ -15,7 +15,7 @@ function createWindow() {
     });
 
     win.loadFile('index.html')
-    win.webContents.openDevTools();
+    // win.webContents.openDevTools();
 
     Menu.setApplicationMenu(null);
 
@@ -111,26 +111,27 @@ ipcMain.on('synchronous-message', (event, arg) => {
             event.returnValue = 'no';
         }
     } else if (arg == 'rest') {
-        setTimeout(() => {
-            let index = dialog.showMessageBoxSync(win, {
-                type: 'question',
-                buttons: ['取消', '休息一下'],
-                title: '提示',
-                message: '已经工作一段时间了，休息一下吧！',
-                defaultId: 1,
-                cancelId: 0
-            });
-
-            if (index == 1) {
-                event.returnValue = 'start-rest';
-            } else {
-                event.returnValue = '';
-            }
-        }, 500);
+        win.show();
+        win.setAlwaysOnTop(true);
+        let index = dialog.showMessageBoxSync(win, {
+            type: 'question',
+            buttons: ['取消', '休息一下'],
+            title: '提示',
+            message: '已经工作一段时间了，休息一下吧！',
+            defaultId: 1,
+            cancelId: 0
+        });
+        if (index == 1) {
+            win.webContents.send('start-rest');
+            event.returnValue = 'start-rest';
+        } else if (index == 0) {
+            win.setAlwaysOnTop(false);
+            event.returnValue = '';
+        }
     }
 });
 
-ipcMain.on('show-main-message', (event, arg) => {
+ipcMain.on('alway-show-window', (arg) => {
     let rest = parseInt(arg);
     win.setAlwaysOnTop(true);
     win.setMovable(false);
@@ -141,6 +142,10 @@ ipcMain.on('show-main-message', (event, arg) => {
         win.setMovable(true);
         win.setMinimizable(true);
     }, (rest - 2) * 1000);
+});
+
+ipcMain.on('hide-window', () => {
+    win.hide();
 });
 
 app.on('window-all-closed', () => {

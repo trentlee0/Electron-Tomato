@@ -279,8 +279,10 @@ function run(feature) {
     };
 
     cd.onstart = () => {
-        if (feature.code == 'rest') {
-            ipcRenderer.send('show-main-message', restTime);
+        if (feature.code == 'work') {
+            ipcRenderer.send('hide-window');
+        } else if (feature.code == 'rest') {
+            ipcRenderer.send('alway-show-window', restTime);
         }
     };
 
@@ -304,7 +306,7 @@ function run(feature) {
     };
 
     $(taskBtnSelector).onclick = () => {
-        if (cd != null) cd.clear();
+        if (!cd) cd.clear();
         $(taskBtnSelector).style.display = 'none';
         $(pauseBtnSelector).style.display = 'block';
         if (feature.code == 'work') {
