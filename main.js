@@ -1,7 +1,8 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, Tray, globalShortcut } = require('electron');
+const {app, BrowserWindow, ipcMain, dialog, Menu, Tray, globalShortcut, Notification} = require('electron');
 const path = require('path');
 
 let win;
+
 function createWindow() {
     win = new BrowserWindow({
         width: 800,
@@ -14,7 +15,7 @@ function createWindow() {
         }
     });
 
-    win.loadFile('index.html')
+    win.loadFile('index.html');
 
     Menu.setApplicationMenu(null);
 
@@ -53,12 +54,10 @@ if (!app.requestSingleInstanceLock()) {
 
 app.whenReady().then(() => {
     //全局快捷键
-    globalShortcut.register('CommandOrControl+Shift+P', () => {
+    globalShortcut.register('CommandOrControl+Shift+T', () => {
         win.isVisible() ? win.hide() : win.show();
     });
 }).then(createWindow);
-
-
 
 //系统托盘
 let tray = null;
@@ -67,29 +66,37 @@ app.whenReady().then(() => {
     const trayMenu = Menu.buildFromTemplate([
         {
             label: '显示窗口',
-            accelerator: 'Ctrl+Shift+P',
+            accelerator: 'Ctrl+Shift+T',
             click: () => win.show()
         },
         {
             label: '隐藏窗口',
-            accelerator: 'Ctrl+Shift+P',
+            accelerator: 'Ctrl+Shift+T',
             click: () => win.hide()
         },
         {
             label: '开发者模式',
-            click: () => win.webContents.openDevTools()
+            click: () => {
+                if (win.isVisible()) {
+                    if (win.isDevToolsOpened()) {
+                        win.webContents.closeDevTools();
+                    } else {
+                        win.webContents.openDevTools();
+                    }
+                }
+            }
         },
         {
             label: '工作',
             click: () => {
-                win.webContents.send('start-work');
+                win.webContents.send('start-work-main');
                 win.show();
             }
         },
         {
             label: '休息',
             click: () => {
-                win.webContents.send('start-rest');
+                win.webContents.send('start-rest-main');
                 win.show();
             }
         },
@@ -107,7 +114,7 @@ app.whenReady().then(() => {
 });
 
 ipcMain.on('synchronous-message', (event, arg) => {
-    if (arg == 'quit-timer') {
+    if (arg === 'quit-timer') {
         let index = dialog.showMessageBoxSync(win, {
             type: 'question',
             buttons: ['确定', '取消'],
@@ -116,35 +123,50 @@ ipcMain.on('synchronous-message', (event, arg) => {
             defaultId: 1,
             cancelId: 1
         });
-
-        if (index == 0) {
+        if (index === 0) {
             event.returnValue = 'yes';
         } else {
             event.returnValue = 'no';
         }
-    } else if (arg == 'rest') {
-        win.show();
-        win.setAlwaysOnTop(true);
-        let index = dialog.showMessageBoxSync(win, {
-            type: 'question',
-            buttons: ['取消', '休息一下'],
-            title: '提示',
-            message: '已经工作一段时间了，休息一下吧！',
-            defaultId: 1,
-            cancelId: 0
-        });
-        if (index == 1) {
-            win.webContents.send('start-rest');
-            event.returnValue = 'start-rest';
-        } else if (index == 0) {
-            win.setAlwaysOnTop(false);
-            event.returnValue = '';
-        }
     }
 });
 
-ipcMain.on('alway-show-window', (event, arg) => {
-    console.log(arg);
+ipcMain.on("work-to-rest", ((event, args) => {
+    let msg = '已经工作一段时间了，休息一下吧！';
+    let notification = new Notification({
+        icon: path.join(__dirname, 'img/icon.ico'),
+        title: "番茄时钟",
+        body: msg,
+        timeoutType: "never"
+    });
+    notification.show();
+    notification.on('click', () => {
+        if (!win.isVisible()) win.show();
+    });
+
+    setTimeout(() => {
+        win.show();
+        win.setAlwaysOnTop(true);
+        dialog.showMessageBox(win, {
+            type: 'question',
+            buttons: ['取消', '休息一下'],
+            title: '提示',
+            message: msg,
+            defaultId: 1,
+            cancelId: 0
+        }).then((promise) => {
+            if (promise.response === 1) {
+                win.webContents.send('start-rest-main');
+                notification.close();
+            } else if (promise.response === 0) {
+                win.setAlwaysOnTop(false);
+                notification.close();
+            }
+        });
+    }, 3000);
+}));
+
+ipcMain.on('start-rest', (event, arg) => {
     let rest = parseInt(arg);
     win.setAlwaysOnTop(true);
     win.setMovable(false);
@@ -154,11 +176,35 @@ ipcMain.on('alway-show-window', (event, arg) => {
         win.setAlwaysOnTop(false);
         win.setMovable(true);
         win.setMinimizable(true);
-    }, (rest - 2) * 1000);
+    }, (rest - 1) * 1000);
 });
 
-ipcMain.on('hide-window', () => {
+ipcMain.on('start-work', (sys, msg) => {
     win.hide();
+    let notification = new Notification({
+        icon: path.join(__dirname, 'img/icon.ico'),
+        title: "番茄时钟",
+        body: msg,
+        silent: true
+    });
+    notification.show();
+    setTimeout(() => {
+        notification.close();
+    }, 2000);
+});
+
+ipcMain.on("end-rest", (sys, msg) => {
+    let notification = new Notification({
+        icon: path.join(__dirname, "img/icon.ico"),
+        title: "番茄时钟",
+        body: msg
+    });
+
+    notification.show();
+
+    setTimeout(() => {
+        notification.close();
+    }, 3000);
 });
 
 app.on('window-all-closed', () => {

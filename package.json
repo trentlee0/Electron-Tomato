@@ -11,6 +11,9 @@
     "package": "electron-packager . 番茄时钟 --out ./out --icon=./img/icon.ico --arch=x64 --overwrite --ignore=node_modules"
   },
   "devDependencies": {
-    "electron": "^12.0.0"
-  }
+    "electron": "^12.0.0",
+    "jquery": "^3.6.0",
+    "timer.js": "^1.0.4"
+  },
+  "dependencies": {}
 }

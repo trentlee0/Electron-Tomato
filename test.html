@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="./timer.js"></script>
+</head>
+
+<body>
+    <input type="button" value="Click" />
+</body>
+<script>
+    let timer = new Timer({
+        tick: 1,
+        onstart: () => {
+            console.log("开始");
+        },
+        ontick: (ms) => {
+            console.log("正在计时：" + Math.round(ms / 1000));
+            if (Math.round(ms / 1000) == 5) {
+                console.log(timer.pause());
+            }
+        },
+        onend: () => {
+            console.log("结束");
+            timer.stop();
+            timer.off();
+            timer = null;
+        }
+    });
+    timer.start(10);
+    document.querySelector('input').onclick = () => {
+        if (timer != null) timer.start();
+    };
+</script>
+
+</html>

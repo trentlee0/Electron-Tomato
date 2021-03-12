@@ -1,117 +1,14 @@
-const { ipcRenderer } = require('electron');
+const {ipcRenderer} = require('electron');
+const Timer = require('timer.js');
+window.$ = window.jQuery = require('jquery');
 
-/**
- * 计时器
- */
-class Countdown {
-
-    constructor(totalSecond) {
-        this.pauseSecond = 0;
-        this.totalSecond = 0;
-        this.currentSecond = 0;
-        this.timer = null;
-        /** 在倒计时为0秒时触发的事件 */
-        this.onend = null;
-        /** 在倒计时期间每一秒会触发的事件 */
-        this.ontick = null;
-        /** 在倒计时开始触发的事件 */
-        this.onstart = null;
-        /** 在倒计时暂停时触发的事件 */
-        this.reset(totalSecond);
-    }
-
-    /** 获取剩余时间 */
-    getRemainingSecond() {
-        return this.totalSecond - this.currentSecond;
-    }
-
-    /** 获取当前计时秒数 */
-    getCurrentSecond() {
-        return this.currentSecond;
-    }
-
-    /** 暂停计时 */
-    pause() {
-        this.pauseSecond = this.getRemainingSecond();
-        this.clear();
-        this.isPause = true;
-    }
-
-    /** 继续计时 */
-    continue() {
-        if (this.pauseSecond < 1) return;
-        this.reset(this.pauseSecond);
-        this.isPause = false;
-    }
-
-    /** 清除计时 */
-    clear() {
-        clearInterval(this.timer);
-        this.timer = null;
-    }
-
-    /** 重置计时 */
-    reset(totalSecond) {
-        this.clear();
-        this.totalSecond = totalSecond;
-        this.currentSecond = 0;
-        this.isPause = false;
-        this.i = 0;
-        this.timer = setInterval(() => {
-            if (this.currentSecond + 1 == this.totalSecond) {
-                this.clear();
-            }
-            this.currentSecond++;
-            if (this.ontick) {
-                this.ontick();
-            }
-            if (this.i == 0 && this.onstart) {
-                this.onstart();
-                this.i++;
-            }
-            if (this.getRemainingSecond() == 0) {
-                this.clear();
-                if (this.onend) this.onend();
-            }
-        }, 1000);
-    }
-
-    /** 获取显示字符串 */
-    getShowString() {
-        return Countdown.getRemainingTime(this.getRemainingSecond());
-    }
-
-    /** 剩余时间 */
-    static getRemainingTime(second) {
-        return parseInt(second / 60) + ":" + Countdown.getSecond(second);
-    }
-
-    /** 通过秒数，获取两位时钟秒数 */
-    static getSecond(second) {
-        if (second < 10) return "0" + second;
-        else if (second < 60) return second;
-        return this.getSecond(parseInt(second % 60));
-    }
+/** 通过秒数，获取时钟，小时分钟秒，如果小时为0就不返回小时 */
+function getClockTime(second) {
+    let ss = Math.floor(second % 60);
+    let mm = Math.floor(second / 60);
+    let hh = Math.floor(second / 3600);
+    return ((hh === 0) ? "" : hh.toString().padStart(2, '0') + ":") + mm.toString().padStart(2, '0') + ":" + ss.toString().padStart(2, '0');
 }
-
-/**
- * 通过元素选择器获取元素
- * @param selector : string
- */
-function $(selector) {
-    return document.querySelector(selector);
-}
-
-/** 工作时间，单位：秒 */
-let workTime = 0;
-/** 休息时间，单位：秒 */
-let restTime = 0;
-/** 背景颜色 */
-let background = '';
-/** 通知图标 */
-let logoIcon = './img/logo.png';
-/** 通知标题 */
-let appName = '番茄时钟';
 
 /** 第一个界面 */
 const firstFrameSelector = ".first";
@@ -148,247 +45,225 @@ const titleDivSelector = ".title";
 /** 显示倒计时的元素 */
 const timerDivSelector = ".timer";
 
-let workFeature = {
-    code: 'work',
-    title: 'Working',
-    nextTaskContent: '休息',
-    notification: ' 工作完成!',
-    currentTaskTime: workTime,
-    nextTaskTime: restTime
-};
+/** 工作时间，单位：秒 */
+let workTime = 10;
+/** 休息时间，单位：秒 */
+let restTime = 5;
+/** 背景颜色 */
+let background;
+/** 通知图标 */
+let logoIcon = './img/logo.png';
+/** 通知标题 */
+let appName = '番茄时钟';
 
-let restFeature = {
-    code: 'rest',
-    title: 'Resting',
-    nextTaskContent: '工作',
-    notification: ' 休息完成!',
-    currentTaskTime: restTime,
-    nextTaskTime: workTime
-};
-
-/** 倒计时器 */
-let cd = null;
+let timer = null;
 /** 是否已经开始任务 */
-let isStartTask = false;
+let isClocking = false;
+let isPause = false;
 
 window.onload = () => {
+    initData();
     main();
 };
 
-function main() {
-    console.log("主函数开始执行...");
-    $(settingFrameSelector).style.display = 'none';
-
-    initData();
-
-    $(settingBtnSelector).onclick = () => {
-        if ($(settingFrameSelector).style.display == 'none') {
-            initData();
-            $(settingFrameSelector).style.display = 'block';
-        } else {
-            $(settingFrameSelector).style.display = 'none';
-        }
-    };
-
-    $(colorInputSelector).onkeyup = () => {
-        $(colorShowSelector).style.backgroundColor = $(colorInputSelector).value;
-    };
-
-    $(settingBtnSelector).onmousedown = () => false;
-
-    $(saveBtnSelector).onclick = () => {
-        updateData($(workInputSelector).value, $(restInputSelector).value);
-        updateTheme($(colorInputSelector).value);
-        initData();
-        $(settingBtnSelector).click();
-    };
-
-    $(cancelBtnSelector).onclick = () => $(settingBtnSelector).click();
-
-    $(workBtnSelector).onclick = () => startWork();
-
-    $(restBtnSelector).onclick = () => startRest();
-
-    $(homeBtnSelector).onclick = () => {
-        if ($(firstFrameSelector).style.display == 'none') {
-            let reply = ipcRenderer.sendSync('synchronous-message', 'quit-timer');
-            if (reply == 'yes') {
-                cd.clear();
-                isStartTask = false;
-                $(firstFrameSelector).style.display = 'block';
-                $(secondFrameSelector).style.display = 'none';
-            }
-        }
-    };
-
-    ipcRenderer.on('start-work', () => startWork());
-
-    ipcRenderer.on('start-rest', () => startRest());
-}
-
-/** 开始工作 */
-function startWork() {
-    if (!isStartTask) {
-        $(firstFrameSelector).style.display = 'none';
-        $(secondFrameSelector).style.display = 'block';
-        isStartTask = true;
-        run(workFeature);
+function clearTimer() {
+    if (timer != null) {
+        timer.stop();
+        timer.off();
+        timer = null;
     }
+    isClocking = false;
 }
 
-/** 开始休息 */
-function startRest() {
-    if (!isStartTask) {
-        $(firstFrameSelector).style.display = 'none';
-        $(secondFrameSelector).style.display = 'block';
-        isStartTask = true;
-        run(restFeature);
+function startTimer(second) {
+    if (timer != null) timer.start(second);
+    isClocking = true;
+}
+
+function run(type) {
+    timer = new Timer({
+        onstart: () => start(type),
+        ontick: (ms) => $(timerDivSelector).html(getClockTime(Math.round(ms / 1000))),
+        onend: () => end(type)
+    });
+
+    if (!isClocking) {
+        $(firstFrameSelector).css("display", 'none');
+        $(secondFrameSelector).css("display", 'block');
+        isClocking = true;
+        if (type === 'work') {
+            $(timerDivSelector).html(getClockTime(workTime));
+            startTimer(workTime);
+        } else if (type === 'rest') {
+            $(timerDivSelector).html(getClockTime(restTime));
+            startTimer(restTime);
+        }
     }
 }
 
 /**
- * 执行不同功能的函数
- * @param feature : workFeature|restFeature
- * @return void
+ * 开始计时调用执行
  */
-function run(feature) {
-    if (feature == null) return;
+function start(type) {
+    $(taskBtnSelector).css("display", 'none');
+    $(pauseBtnSelector).css("display", 'block');
+    $(pauseBtnSelector).html('暂停');
 
-    $(timerDivSelector).innerHTML = Countdown.getRemainingTime(feature.currentTaskTime);
-    $(taskBtnSelector).innerHTML = feature.nextTaskContent;
-    $(taskBtnSelector).style.display = 'none';
-    $(pauseBtnSelector).style.display = 'block';
-    $(pauseBtnSelector).innerHTML = '暂停';
-    $(titleDivSelector).innerHTML = feature.title;
-
-    if (feature.code == 'work') {
-        new Notification(appName, {
-            icon: logoIcon,
-            body: "开始工作! 倒计时：" + Countdown.getRemainingTime(feature.currentTaskTime)
-        });
-    } else if (feature.code == 'rest') {
-        $(pauseBtnSelector).style.display = 'none';
+    if (type === 'work') {
+        $(taskBtnSelector).html("休息");
+        $(titleDivSelector).html("Working");
+        ipcRenderer.send('start-work', "开始工作! 倒计时：" + getClockTime(workTime));
+    } else if (type === 'rest') {
+        $(taskBtnSelector).html("工作");
+        $(titleDivSelector).html("Resting");
+        ipcRenderer.send('start-rest', restTime);
+        $(pauseBtnSelector).css("display", "none");
     }
+}
 
-    cd = new Countdown(feature.currentTaskTime);
+/**
+ * 计时结束调用执行
+ */
+function end(type) {
+    $(pauseBtnSelector).css("display", 'none');
+    $(taskBtnSelector).css("display", 'block');
+    $(titleDivSelector).html('');
 
-    /***********以下事件会在前台或后台运行***********/
+    if (type === 'work') {
+        $(timerDivSelector).html('工作完成!');
+        ipcRenderer.send('work-to-rest');
+    } else if (type === 'rest') {
+        let notification = "休息完成!";
+        $(timerDivSelector).html(notification);
+        ipcRenderer.send("end-rest", notification);
+    }
+    clearTimer();
+}
 
-    cd.ontick = () => {
-        $(timerDivSelector).innerHTML = cd.getShowString();
-    };
+function main() {
+    $(settingBtnSelector).click(() => $(settingFrameSelector).fadeToggle("fast"));
 
-    cd.onstart = () => {
-        if (feature.code == 'work') {
-            ipcRenderer.send('hide-window');
-        } else if (feature.code == 'rest') {
-            ipcRenderer.send('alway-show-window', restTime);
-        }
-    };
+    $(settingBtnSelector).mousedown(() => false);
 
-    cd.onend = () => {
-        $(pauseBtnSelector).style.display = 'none';
-        $(taskBtnSelector).style.display = 'block';
-        $(titleDivSelector).innerHTML = '';
-        $(timerDivSelector).innerHTML = feature.notification;
+    $(colorInputSelector).keyup(() => $(colorShowSelector).css("background-color", $(colorInputSelector).val()));
 
-        if (feature.code == 'work') {
-            let reply = ipcRenderer.sendSync('synchronous-message', 'rest');
-            if (reply == 'start-rest') {
-                run(restFeature);
+    $(saveBtnSelector).click(() => {
+        updateData({
+            workHours: $(workInputSelector).val(),
+            restHours: $(restInputSelector).val(),
+            backgroundColor: $(colorInputSelector).val()
+        });
+        $(settingBtnSelector).click();
+    });
+
+    $(cancelBtnSelector).click(() => $(settingBtnSelector).click());
+
+    $(workBtnSelector).on("click", () => run('work'));
+
+    $(restBtnSelector).click(() => run('rest'));
+
+    ipcRenderer.on('start-work-main', () => $(workBtnSelector).click());
+
+    ipcRenderer.on('start-rest-main', () => $(restBtnSelector).click());
+
+    $(homeBtnSelector).click(() => {
+        if ($(firstFrameSelector).css("display") === 'none') {
+            if (isClocking) {
+                let reply = ipcRenderer.sendSync('synchronous-message', 'quit-timer');
+                if (reply === 'yes') {
+                    clearTimer();
+                    $(firstFrameSelector).css("display", "block");
+                    $(secondFrameSelector).css("display", "none");
+                }
+            } else {
+                clearTimer();
+                $(firstFrameSelector).css("display", "block");
+                $(secondFrameSelector).css("display", "none");
             }
-        } else if (feature.code == 'rest') {
-            new Notification(appName, {
-                icon: logoIcon,
-                body: feature.notification
-            });
         }
-    };
+    });
 
-    $(taskBtnSelector).onclick = () => {
-        if (!cd) cd.clear();
-        $(taskBtnSelector).style.display = 'none';
-        $(pauseBtnSelector).style.display = 'block';
-        if (feature.code == 'work') {
-            run(restFeature);
-        } else {
-            run(workFeature);
+    $(pauseBtnSelector).click(() => {
+        if (timer != null) {
+            if (isPause) {
+                timer.start();
+                $(pauseBtnSelector).html("暂停");
+                isPause = false;
+            } else {
+                timer.pause();
+                $(pauseBtnSelector).html("继续");
+                isPause = true;
+            }
         }
-    };
+    });
 
-    $(pauseBtnSelector).onclick = () => {
-        if (cd.isPause) {
-            cd.continue();
-            $(pauseBtnSelector).innerHTML = "暂停";
-        } else {
-            cd.pause();
-            $(pauseBtnSelector).innerHTML = "继续";
+    $(taskBtnSelector).click(() => {
+        clearTimer();
+        $(taskBtnSelector).css("display", "none");
+        $(pauseBtnSelector).css("display", "block");
+        if ($(taskBtnSelector).text().trim() === '工作') {
+            run('work');
+        } else if ($(taskBtnSelector).text().trim() === '休息') {
+            run('rest');
         }
-    };
+    });
 }
 
 /**
  * 初始化数据
- * @return void
  */
 function initData() {
     let storage = window.localStorage;
 
-    let work = storage.getItem('work');
-    if (work == null) {
-        work = '10';
-        storage.setItem('work', work);
+    let workHours = storage.getItem('work');
+    let restHours = storage.getItem('rest');
+    let backgroundColor = storage.getItem('background');
+
+    if (workHours == null && restHours == null && backgroundColor == null) {
+        updateData({workHours: 10, restHours: 5, backgroundColor: '#87CEEB'});
+        return;
     }
 
-    let rest = storage.getItem('rest')
-    if (rest == null) {
-        rest = '5';
-        storage.setItem('rest', rest);
-    }
+    if (workHours == null) updateData({workHours: 10});
+    else workTime = workHours;
 
-    let color = storage.getItem('background')
-    if (color == null) {
-        color = '#87CEEB';
-        storage.setItem('background', color);
-    }
+    if (restHours == null) updateData({restHours: 5});
+    else restTime = restHours;
 
-    workTime = parseInt(work);
-    restTime = parseInt(rest);
-    background = color;
+    if (backgroundColor == null) updateData({backgroundColor: '#87CEEB'});
+    else background = backgroundColor;
 
-    workFeature.currentTaskTime = workTime;
-    workFeature.nextTaskTime = restTime;
-    restFeature.currentTaskTime = restTime;
-    restFeature.nextTaskTime = workTime;
+    $('html').css("background-color", background);
+    $(colorShowSelector).css("background-color", background);
+    $(colorInputSelector).val(background);
 
-    $(colorShowSelector).style.backgroundColor = background;
-    $('html').style.backgroundColor = background;
-    $(colorInputSelector).value = background;
-    $(workInputSelector).value = workTime;
-    $(restInputSelector).value = restTime;
+    $(workInputSelector).val(workTime);
+    $(restInputSelector).val(restTime);
 }
 
 /**
- * 更新工作和休息时间的数据
- * @param newWork : number
- * @param newRest : number
+ * 更新数据
  */
-function updateData(newWork, newRest) {
+function updateData({workHours, restHours, backgroundColor}) {
     let storage = window.localStorage;
 
-    storage.setItem('work', newWork);
-    storage.setItem('rest', newRest);
-}
+    if (workHours != null) {
+        storage.setItem('work', workHours.toString());
+        $(workInputSelector).val(workTime);
+        workTime = workHours;
+    }
 
-/**
- * 更改背景主题
- * @param color : string Hexadecimal color code
- */
-function updateTheme(color) {
-    let storage = window.localStorage;
+    if (restHours != null) {
+        storage.setItem('rest', restHours.toString());
+        $(restInputSelector).val(restTime);
+        restTime = restHours;
+    }
 
-    storage.setItem('background', color);
-
-    background = color;
-    $('html').style.backgroundColor = color;
+    if (backgroundColor != null) {
+        storage.setItem('background', backgroundColor);
+        $('html').css("background-color", backgroundColor);
+        $(colorShowSelector).css("background-color", backgroundColor);
+        $(colorInputSelector).val(backgroundColor);
+        background = backgroundColor;
+    }
 }
