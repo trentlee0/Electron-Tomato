@@ -62,7 +62,7 @@ app.whenReady().then(() => {
 //系统托盘
 let tray = null;
 app.whenReady().then(() => {
-    tray = new Tray(path.join(__dirname, 'img/icon.ico'));
+    tray = new Tray(path.join(__dirname, 'img/icon_min.ico'));
     const trayMenu = Menu.buildFromTemplate([
         {
             label: '显示窗口',

@@ -5,15 +5,34 @@
   "main": "main.js",
   "author": "Trent0",
   "license": "ISC",
+  "build": {
+    "appId": "com.trent.tomato",
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "./img/icon.ico",
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    }
+  },
+  "postinstall": "electron-builder install-app-deps",
   "scripts": {
     "start": "electron .",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "package": "electron-packager . 番茄时钟 --out ./out --icon=./img/icon.ico --arch=x64 --overwrite --ignore=node_modules"
+    "dist": "electron-builder --win --x64",
+    "package": "electron-packager . 番茄时钟 --win --out ./out --arch=x64 --overwrite --icon=./img/icon.ico"
   },
   "devDependencies": {
-    "electron": "^12.0.0",
+    "electron": "^12.0.0"
+  },
+  "dependencies": {
     "jquery": "^3.6.0",
     "timer.js": "^1.0.4"
-  },
-  "dependencies": {}
+  }
 }
