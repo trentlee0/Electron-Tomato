@@ -115,13 +115,12 @@ app.whenReady().then(() => {
             label: '开发者模式',
             checked: db.read().get('devToolsOpened').value(),
             click: () => {
-                let isOpened = win.isDevToolsOpened();
-                if (isOpened) {
+                if (win.isDevToolsOpened()) {
                     win.webContents.closeDevTools();
                 } else {
                     win.webContents.openDevTools();
                 }
-                db.set('devToolsOpened', !isOpened).write();
+                db.set('devToolsOpened', win.isDevToolsOpened()).write();
             }
         },
         {
