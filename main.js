@@ -242,7 +242,7 @@ function handler() {
         });
 
         tray.setImage(path.join(__dirname, trayWorkIcon));
-        tray.setToolTip("💻Working...");
+        tray.setToolTip("💻 Working...");
 
         if (db.read().get('profile.startWorkNotification').value()) {
             notification.show();
@@ -261,6 +261,7 @@ function handler() {
         });
 
         notification.show();
+        win.focus();
 
         setTimeout(() => {
             notification.close();
