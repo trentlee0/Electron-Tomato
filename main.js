@@ -14,8 +14,8 @@ const db = lowdb(adapter);
 
 db.defaults({
     profile: {
-        work: 10,
-        rest: 5,
+        work: 2700,
+        rest: 300,
         background: "#87CEAA",
         showWindowShortcut: 'CmdOrCtrl+Shift+T',
         boot: false,
