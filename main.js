@@ -1,21 +1,22 @@
-const {app, globalShortcut, ipcMain, dialog, BrowserWindow, Menu, Tray, Notification} = require('electron');
+const {app, globalShortcut, ipcMain, dialog, shell, BrowserWindow, Menu, Tray, Notification} = require('electron');
 
 const fs = require('fs');
 const path = require('path');
 
 const lowdb = require('lowdb');
 const FileSync = require('lowdb/adapters/FileSync');
-const appDataPath = app.getPath("appData");
-if (!fs.existsSync(appDataPath)) {
-    fs.mkdirSync(appDataPath);
+const userDataPath = app.getPath("userData");
+if (!fs.existsSync(userDataPath)) {
+    fs.mkdirSync(userDataPath);
 }
-const adapter = new FileSync(path.join(appDataPath, 'tomato/settings.json'));
+const confFile = path.join(userDataPath, '/settings.json');
+const adapter = new FileSync(confFile);
 const db = lowdb(adapter);
 
 db.defaults({
     profile: {
-        work: 10,
-        rest: 5,
+        work: 2700,
+        rest: 300,
         background: "#87CEAA",
         showWindowShortcut: 'CmdOrCtrl+Shift+T',
         boot: false,
@@ -30,6 +31,7 @@ const trayWorkIcon = "img/icon_tray_work.ico";
 
 let win;
 let tray;
+let isResting = false;
 
 function createWindow() {
     win = new BrowserWindow({
@@ -91,8 +93,16 @@ function initSettings() {
 
     //全局快捷键
     globalShortcut.register(db.read().get('profile.showWindowShortcut').value(), () => {
-        win.isVisible() ? win.hide() : win.show();
+        if (!isResting) showOrHideMainWindow();
     });
+}
+
+function showOrHideMainWindow() {
+    if (win.isVisible()) {
+        win.isFocused() ? win.hide() : win.focus();
+    } else {
+        win.show();
+    }
 }
 
 function createTray() {
@@ -101,8 +111,11 @@ function createTray() {
         {
             label: '显示/隐藏窗口',
             accelerator: db.read().get('profile.showWindowShortcut').value(),
-            click: () => win.isVisible() ? win.hide() : win.show()
-
+            click: () => {
+                if (!isResting) {
+                    win.isVisible() ? win.hide() : win.show()
+                }
+            }
         },
         {
             label: '开发者模式',
@@ -131,6 +144,12 @@ function createTray() {
             }
         },
         {
+            label: '配置文件',
+            click: () => {
+                shell.showItemInFolder(confFile);
+            }
+        },
+        {
             label: '工作',
             click: () => {
                 win.webContents.send('start-work-main');
@@ -153,7 +172,9 @@ function createTray() {
     tray.setToolTip('番茄时钟');
     tray.setContextMenu(trayMenu);
     tray.on('click', () => {
-        win.isVisible() ? win.hide() : win.show();
+        if (!isResting) {
+            win.isVisible() ? win.hide() : win.show();
+        }
     });
 }
 
@@ -170,6 +191,8 @@ function handler() {
             });
             if (index === 0) {
                 event.returnValue = 'yes';
+                isResting = false;
+                handleResting(isResting);
 
                 tray.setImage(path.join(__dirname, trayIcon));
                 tray.setToolTip("番茄时钟");
@@ -193,7 +216,10 @@ function handler() {
 
         notification.show();
         notification.on('click', () => {
-            if (!win.isVisible()) win.show();
+            if (!win.isVisible()) {
+                win.show();
+                win.focus();
+            }
         });
 
         setTimeout(() => {
@@ -220,14 +246,12 @@ function handler() {
 
     ipcMain.on('start-rest', (event, arg) => {
         let rest = parseInt(arg);
-        win.setAlwaysOnTop(true);
-        win.setMovable(false);
-        win.setMinimizable(false);
+        isResting = true;
+        handleResting(isResting);
 
         setTimeout(() => {
-            win.setAlwaysOnTop(false);
-            win.setMovable(true);
-            win.setMinimizable(true);
+            isResting = false;
+            handleResting(isResting);
         }, (rest - 1) * 1000);
     });
 
@@ -267,6 +291,13 @@ function handler() {
             notification.close();
         }, 3000);
     });
+}
+
+function handleResting(isResting) {
+    win.setAlwaysOnTop(isResting);
+    win.setMovable(!isResting);
+    win.setMinimizable(!isResting);
+    win.setClosable(!isResting);
 }
 
 if (!app.requestSingleInstanceLock()) {

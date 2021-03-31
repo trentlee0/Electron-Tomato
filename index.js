@@ -5,12 +5,12 @@ window.$ = window.jQuery = require('jquery');
 
 const path = require('path');
 const lowdb = require('lowdb');
-const appDataPath = remote.app.getPath('appData');
-if (!fs.existsSync(appDataPath)) {
-    fs.mkdirSync(appDataPath);
+const userDataPath = remote.app.getPath('userData');
+if (!fs.existsSync(userDataPath)) {
+    fs.mkdirSync(userDataPath);
 }
 const FileSync = require('lowdb/adapters/FileSync');
-const adapter = new FileSync(path.join(appDataPath, 'tomato/settings.json'));
+const adapter = new FileSync(path.join(userDataPath, '/settings.json'));
 const db = lowdb(adapter);
 
 /** 第一个界面 */
@@ -80,6 +80,8 @@ function startTimer(second) {
 }
 
 function run(type) {
+    if (isClocking) return;
+
     timer = new Timer({
         onstart: () => {
             view({type: type, start: true});
@@ -101,14 +103,11 @@ function run(type) {
         }
     });
 
-    if (!isClocking) {
-        view({type: 'second'});
-        isClocking = true;
-        if (type === 'work') {
-            startTimer(workTime);
-        } else if (type === 'rest') {
-            startTimer(restTime);
-        }
+    view({type: 'second'});
+    if (type === 'work') {
+        startTimer(workTime);
+    } else if (type === 'rest') {
+        startTimer(restTime);
     }
 }
 
