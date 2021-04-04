@@ -9,6 +9,43 @@ exports.getDb = function (APP) {
     if (!fs.existsSync(userDataPath)) {
         fs.mkdirSync(userDataPath);
     }
+
+    let targetThemeDir = path.join(userDataPath, 'theme');
+    if (!fs.existsSync(targetThemeDir)) {
+        fs.mkdirSync(targetThemeDir);
+    }
+
+
+    function copy(dir, outDir, name) {
+        let file = path.join(dir, name);
+        if (fs.statSync(file).isDirectory()) {
+            let outFile = path.join(outDir, name);
+            if (name) {
+                if (!fs.existsSync(outFile)) {
+                    fs.mkdirSync(outFile);
+                }
+            }
+            fs.readdirSync(file).forEach((item) => {
+                copy(file, outFile, item);
+            });
+        } else {
+            let outFile = path.join(outDir, name);
+            let pathForamte = path.parse(outFile);
+            let newFilePath = path.format(pathForamte);
+            fs.writeFileSync(newFilePath, fs.readFileSync(file));
+        }
+    }
+
+    let sourceThemeDir;
+    console.log(__dirname);
+    if (APP.isPackaged) {
+        sourceThemeDir = path.join(__dirname.substr(0, __dirname.indexOf("\\js")) + ".unpacked", "css/theme/");
+        console.log(sourceThemeDir);
+    } else {
+        sourceThemeDir = "./css/theme/";
+    }
+    copy(sourceThemeDir, targetThemeDir, "");
+
     const confFile = path.join(userDataPath, '/settings.json');
     const adapter = new FileSync(confFile);
     const db = lowdb(adapter);
@@ -47,5 +84,5 @@ exports.getDb = function (APP) {
             total: 0
         }
     }).write();
-    return {db: db, confFile: confFile};
+    return {db: db, confFile: confFile, targetThemeDir: targetThemeDir};
 };

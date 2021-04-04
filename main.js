@@ -2,8 +2,9 @@ const {app, globalShortcut, ipcMain, dialog, shell, BrowserWindow, Menu, Tray, N
 const ioHook = require('iohook');
 const path = require('path');
 const dataStore = require('./js/datastore');
-const db = dataStore.getDb(app)['db'];
-const confFile = dataStore.getDb(app)['confFile'];
+const array = dataStore.getDb(app);
+const db = array['db'];
+const confFile = array['confFile'];
 
 const icon = "img/icon.ico";
 const trayIcon = "img/icon_tray.ico";

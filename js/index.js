@@ -4,7 +4,9 @@ const path = require('path');
 const Timer = require('timer.js');
 window.$ = window.jQuery = require('jquery');
 const dataStore = require('./js/datastore');
-const db = dataStore.getDb(remote.app)['db'];
+const array = dataStore.getDb(remote.app);
+const db = array['db'];
+const targetThemeDir = array['targetThemeDir'];
 
 
 /** 第一个界面 */
@@ -72,6 +74,14 @@ let isPause = false;
 let workTipTimer = null;
 
 window.onload = () => {
+    //获取主题目录下的主题
+    let dirs = getDirs(targetThemeDir);
+    for (let i = 0; i < dirs.length; i++) {
+        let op = document.createElement("option");
+        op.value = dirs[i];
+        op.innerText = dirs[i];
+        $(themeInputSelector).append(op);
+    }
     initData();
     main();
 };
@@ -154,22 +164,9 @@ function run(type) {
 }
 
 function main() {
-    //获取主题目录下的主题
-    let dirs = getDirs(path.join(__dirname, 'css/theme/'));
-    for (let i = 0; i < dirs.length; i++) {
-        let op = document.createElement("option");
-        op.value = dirs[i];
-        op.innerText = dirs[i];
-        $(themeInputSelector).append(op);
-    }
 
     $(openThemeFileSelector).on('click', () => {
-        console.log(__dirname);
-        if (remote.app.isPackaged) {
-            shell.showItemInFolder(path.join(__dirname + ".unpacked", "css/theme/", theme));
-        } else {
-            shell.showItemInFolder(path.join(__dirname, "css/theme/", theme));
-        }
+        shell.showItemInFolder(path.join(targetThemeDir, theme));
     });
 
     $(settingBtnSelector).click((event) => {
@@ -407,7 +404,8 @@ function updateData({workHours, restHours, themePath, runMode}) {
  * 更新视图数据
  */
 function updateViewData() {
-    $("#theme").attr("href", "./css/theme/" + theme + "/" + theme + ".css");
+    $("#theme").attr("href", path.join(targetThemeDir, theme, theme + ".css"));
+
     $(themeInputSelector).val(theme);
     $(workInputSelector).val(workTime / 60);
     $(restInputSelector).val(restTime / 60);
