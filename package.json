@@ -1,6 +1,6 @@
 {
   "name": "tomato",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "番茄时钟",
   "main": "main.js",
   "author": "Trent0",

@@ -118,7 +118,7 @@ function run(type) {
                 ranIndex = (ranIndex + 1) % workTips.length;
                 $(workTipSelector).html(workTips[ranIndex]);
                 $(workTipSelector).fadeIn('slow');
-            }, 10 * 1000);
+            }, 20 * 1000);
         },
         ontick: (ms) => $(timerDivSelector).html(getClockTime(Math.round(ms / 1000))),
         onend: () => {
