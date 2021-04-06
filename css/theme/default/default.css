@@ -13,7 +13,8 @@
     html {
         content: "dark";
         --theme-bgColor: #363b40;
-        --tip-color: #99978a;
+        /*--tip-color: #b6b4ab;*/
+        --tip-color: #c6c5be;
         --font-color: #d8d7d3;
     }
 }

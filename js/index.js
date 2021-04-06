@@ -1,60 +1,70 @@
 const {ipcRenderer, remote, shell} = require('electron');
 const fs = require('fs');
 const path = require('path');
-const Timer = require('timer.js');
 window.$ = window.jQuery = require('jquery');
 const dataStore = require('./js/datastore');
 const array = dataStore.getDb(remote.app);
 const db = array['db'];
 const targetThemeDir = array['targetThemeDir'];
+const ReinforceTimer = require('./js/reinforce-timer');
+
+$.extend(window, {
+    //第一个界面
+    firstFrame: ".first",
+    //第二个界面
+    secondFrame: ".second",
+    //休息按钮
+    restBtn: ".rest-btn",
+    //工作按钮
+    workBtn: ".work-btn",
+    //下一个任务按钮
+    taskBtn: ".task-btn",
+    //暂停按钮
+    pauseBtn: ".pause-btn",
+    //保存设置按钮
+    saveBtn: ".save-btn",
+    //取消保存设置按钮
+    cancelBtn: ".cancel-btn",
+    //设置按钮
+    settingBtn: ".setting-btn",
+    //返回主页按钮
+    homeBtn: ".home-btn",
+    //设置面板
+    settingFrame: ".setting-frame",
+    //输入工作时间的文本框
+    workInput: "#work-input",
+    //输入休息时间的文本框
+    restInput: "#rest-input",
+    //输入背景颜色的文本框
+    themeInput: "#theme-input",
+    //显示标题的元素
+    titleDiv: ".title",
+    //显示倒计时的元素
+    timerDiv: ".timer",
+    //手动模式单选按钮
+    manualModeRadio: "#manual-mode",
+    //自动模式单选按钮
+    autoModeRadio: "#auto-mode",
+    //打开主题文件按钮
+    openThemeFileBtn: "#open-theme-file",
+    //工作时，提示的文字
+    workTipDiv: "#work-tip",
+    //显示总番茄数的元素
+    tomatoTotalCountSpan: "#tomato-all-count",
+    //显示今日番茄数的元素
+    tomatoTodayCountSpan: "#tomato-today-count"
+});
 
 
-/** 第一个界面 */
-const firstFrameSelector = ".first";
-/** 第二个界面 */
-const secondFrameSelector = ".second";
-/** 休息按钮 */
-const restBtnSelector = ".rest-btn";
-/** 工作按钮 */
-const workBtnSelector = ".work-btn";
-/** 下一个任务按钮 */
-const taskBtnSelector = ".task-btn";
-/** 暂停按钮 */
-const pauseBtnSelector = ".pause-btn";
-/** 保存设置按钮 */
-const saveBtnSelector = ".save-btn";
-/** 取消保存设置按钮 */
-const cancelBtnSelector = ".cancel-btn";
-/** 设置按钮 */
-const settingBtnSelector = ".setting-btn";
-/** 返回主页按钮 */
-const homeBtnSelector = ".home-btn";
-/** 设置面板 */
-const settingFrameSelector = ".setting-frame";
-/** 输入工作时间的文本框 */
-const workInputSelector = "#work-input";
-/** 输入休息时间的文本框 */
-const restInputSelector = "#rest-input";
-/** 输入背景颜色的文本框 */
-const themeInputSelector = "#theme-input";
-/** 显示标题的元素 */
-const titleDivSelector = ".title";
-/** 显示倒计时的元素 */
-const timerDivSelector = ".timer";
-/** 手动模式单选按钮 */
-const manualModeSelector = "#manual-mode";
-/** 自动模式单选按钮 */
-const autoModeSelector = "#auto-mode";
-const openThemeFileSelector = "#open-theme-file";
-/** 工作时，提示的文字 */
-const workTipSelector = "#work-tip";
-/** 显示总番茄数的元素 */
-const tomatoAllCountSelector = "#tomato-all-count";
-/** 显示今日番茄数的元素 */
-const tomatoTodayCountSelector = "#tomato-today-count";
+/** 计时类型*/
+const work = 'work';
+const rest = 'rest';
+
+/** 计时器 */
+let timer = null;
 
 /** 总番茄数 */
-let tomatoAllCount = 0;
+let tomatoTotalCount = 0;
 /** 今日番茄数 */
 let tomatoTodayCount = 0;
 /** 工作时间，单位：秒 */
@@ -65,13 +75,6 @@ let restTime = 300;
 let theme = 'default';
 /** 手动/自动模式 */
 let mode = 'manual';
-/** 计时器 */
-let timer = null;
-/** 是否已经开始任务 */
-let isClocking = false;
-/** 是否暂停 */
-let isPause = false;
-let workTipTimer = null;
 
 window.onload = () => {
     //获取主题目录下的主题
@@ -80,38 +83,29 @@ window.onload = () => {
         let op = document.createElement("option");
         op.value = dirs[i];
         op.innerText = dirs[i];
-        $(themeInputSelector).append(op);
+        $(themeInput).append(op);
     }
     initData();
     main();
 };
 
-function clearTimer() {
-    if (timer != null) {
-        timer.stop();
-        timer.off();
-        timer = null;
-    }
-    if (workTipTimer != null) {
-        clearInterval(workTipTimer);
-        workTipTimer = null;
-    }
-    isClocking = false;
-}
-
-function startTimer(second) {
-    if (timer != null) timer.start(second);
-    isClocking = true;
-}
-
 function run(type) {
-    if (isClocking) return;
+    if (timer && timer.getStatus() !== 'stopped') return;
 
-    timer = new Timer({
+    let tips = [''];
+
+    let workTips = db.read().get('workTips').value();
+    let restTips = db.read().get('restTips').value();
+    let tipChangeSecond = 20;
+    let workTipTimer = null;
+    timer = new ReinforceTimer({
+        name: type,
         onstart: () => {
-            if (type === 'work') {
-                ipcRenderer.send('start-work', "开始工作! 倒计时：" + getClockTime(workTime));
-            } else if (type === 'rest') {
+            if (type === work) {
+                tips = workTips;
+                ipcRenderer.send('start-work', "开始工作! 倒计时：" + ReinforceTimer.formatTime(workTime));
+            } else if (type === rest) {
+                tips = restTips;
                 ipcRenderer.send('start-rest', restTime);
             }
 
@@ -120,210 +114,226 @@ function run(type) {
                 workTipTimer = null;
             }
 
-            let workTips = db.read().get('workTips').value();
-            let ranIndex = Math.floor(Math.random() * workTips.length);
-            $(workTipSelector).html(workTips[ranIndex]);
+            let ranIndex = Math.floor(Math.random() * tips.length);
+            if (isShow(workTipDiv)) {
+                $(workTipDiv).hide();
+                $(workTipDiv).html(tips[ranIndex]);
+                $(workTipDiv).fadeIn('slow');
+            } else {
+                $(workTipDiv).html(tips[ranIndex]);
+            }
+
             workTipTimer = setInterval(() => {
-                $(workTipSelector).hide();
-                ranIndex = (ranIndex + 1) % workTips.length;
-                $(workTipSelector).html(workTips[ranIndex]);
-                $(workTipSelector).fadeIn('slow');
-            }, 20 * 1000);
+                if (tips.length > 1) {
+                    $(workTipDiv).hide();
+                    ranIndex = (ranIndex + 1) % tips.length;
+                    $(workTipDiv).html(tips[ranIndex]);
+                    $(workTipDiv).fadeIn('slow');
+                }
+            }, tipChangeSecond * 1000);
         },
-        ontick: (ms) => $(timerDivSelector).html(getClockTime(Math.round(ms / 1000))),
+        ontick: (s) => $(timerDiv).html(ReinforceTimer.formatTime((s))),
+        onpause: () => ipcRenderer.send('pause-work'),
         onend: () => {
             view({type: type, end: true});
-            if (type === 'work') {
-                tomatoAllCount++;
-                db.set('tomatoCount.total', tomatoAllCount).write();
-                $(tomatoAllCountSelector).html(tomatoAllCount);
+            $(workTipDiv).hide();
+            if (type === work) {
+                tomatoTotalCount++;
+                db.set('tomatoCount.total', tomatoTotalCount).write();
+                $(tomatoTotalCountSpan).html(tomatoTotalCount);
 
-                if (isSameDay()) {
+                if (today()) {
                     tomatoTodayCount++;
                     db.set('tomatoCount.today', tomatoTodayCount).write();
-                    db.set('tomatoCount.todayUpdateTime', getNowDate()).write();
-                    $(tomatoTodayCountSelector).html(tomatoTodayCount);
+                    db.set('tomatoCount.todayUpdateDate', getNowDate()).write();
+                    $(tomatoTodayCountSpan).html(tomatoTodayCount);
                 }
 
+                $(workTipDiv).html('休息一下吧!');
+                $(workTipDiv).fadeIn('slow');
                 ipcRenderer.send('end-work');
-            } else if (type === 'rest') {
+            } else if (type === rest) {
+                $(workTipDiv).html('继续工作吧!');
+                $(workTipDiv).fadeIn('slow');
                 ipcRenderer.send("end-rest", "休息完成!");
             }
 
-            clearTimer();
+            timer.stop();
+        },
+        onstop: () => {
+            if (workTipTimer) {
+                clearInterval(workTipTimer);
+                workTipTimer = null;
+            }
         }
     });
 
     view({type: type, start: true});
     view({type: 'second'});
-    if (type === 'work') {
-        startTimer(workTime);
-    } else if (type === 'rest') {
-        startTimer(restTime);
+    if (type === work) {
+        timer.start(workTime);
+    } else if (type === rest) {
+        timer.start(restTime);
     }
 }
 
 function main() {
 
-    $(openThemeFileSelector).on('click', () => {
+    $(openThemeFileBtn).on('click', () => {
         shell.showItemInFolder(path.join(targetThemeDir, theme));
     });
 
-    $(settingBtnSelector).click((event) => {
-        $(settingFrameSelector).fadeToggle("fast");
+    $(settingBtn).click((event) => {
+        $(settingFrame).fadeToggle("fast");
         event.stopPropagation();
     });
 
-    $(settingBtnSelector).mousedown(() => false);
+    $(settingBtn).mousedown(() => false);
 
-    $(saveBtnSelector).click(() => {
+    $(saveBtn).click(() => {
         updateData({
-            workHours: parseInt($(workInputSelector).val()) * 60,
-            restHours: parseInt($(restInputSelector).val()) * 60,
-            themePath: $(themeInputSelector).val(),
+            workHours: parseInt($(workInput).val()) * 60,
+            restHours: parseInt($(restInput).val()) * 60,
+            themePath: $(themeInput).val(),
             runMode: $("input[name='mode']:checked").val()
         });
-        $(settingBtnSelector).click();
+        $(settingBtn).click();
     });
 
-    $(cancelBtnSelector).click(() => $(settingBtnSelector).click());
+    $(cancelBtn).click(() => $(settingBtn).click());
 
-    $(workBtnSelector).on("click", () => run('work'));
+    $(workBtn).on("click", () => run(work));
+
+    ipcRenderer.on('pause-work-main', () => {
+        if (timer && timer.getStatus() !== 'stopped' && timer.getName() === work) {
+            timer.pause();
+        }
+    });
+
+    ipcRenderer.on('continue-work-main', () => {
+        if (timer && timer.getStatus() === 'paused' && timer.getName() === work) {
+            timer.continue();
+        }
+    });
 
     $(document).on("keydown", (e) => {
-        if (isFirstFrame()) {
+        if (isShow(firstFrame)) {
             // 空格
             if (e.keyCode === 32) {
-                $(workBtnSelector).click();
+                run(work);
             }
         } else {
-            if (!isClocking) {
+            if (timer.getStatus() === 'stopped') {
                 if (e.keyCode === 32) {
-                    $(taskBtnSelector).click();
+                    $(taskBtn).click();
                 }
             }
         }
         // Ctrl + W
         if (e.ctrlKey && e.keyCode === 87) {
-            ipcRenderer.send("quit-app");
+            ipcRenderer.send("hide-app");
         }
     });
 
-    $(restBtnSelector).click(() => run('rest'));
+    $(restBtn).click(() => run(rest));
 
-    ipcRenderer.on('start-work-main', () => $(workBtnSelector).click());
+    ipcRenderer.on('start-work-main', () => run(work));
 
-    ipcRenderer.on('start-rest-main', () => $(restBtnSelector).click());
+    ipcRenderer.on('start-rest-main', () => run(rest));
 
-    ipcRenderer.on('pause-work', () => pauseHandler());
-
-    $(homeBtnSelector).click(() => {
-        if (!isFirstFrame()) {
-            if (isClocking) {
+    $(homeBtn).click(() => {
+        if (!isShow(firstFrame)) {
+            if (timer.getStatus() !== 'stopped') {
                 let reply = ipcRenderer.sendSync('synchronous-message', 'quit-timer');
                 if (reply === 'yes') {
-                    clearTimer();
+                    timer.stop();
                     view({type: 'first'});
                 }
             } else {
-                clearTimer();
                 view({type: 'first'});
             }
         }
     });
 
     $(document).on('click', () => {
-        $(settingFrameSelector).fadeOut();
+        $(settingFrame).fadeOut();
         updateViewData();
     });
 
-    $(settingFrameSelector).on('click', (event) => {
+    $(settingFrame).on('click', (event) => {
         event.stopPropagation();
     });
 
-    $(pauseBtnSelector).click(() => {
-        pauseHandler();
+    $(pauseBtn).click(() => {
+        pauseHandle();
     });
 
-    $(taskBtnSelector).click(() => {
-        clearTimer();
-        if ($(taskBtnSelector).text().trim() === '工作') {
-            run('work');
-        } else if ($(taskBtnSelector).text().trim() === '休息') {
-            run('rest');
+    $(taskBtn).click(() => {
+        timer.stop();
+        if ($(taskBtn).text().trim() === '工作') {
+            run(work);
+        } else if ($(taskBtn).text().trim() === '休息') {
+            run(rest);
         }
     });
 }
 
-function pauseHandler() {
+function pauseHandle() {
     if (timer != null) {
-        if (isPause) {
-            timer.start();
+        if (timer.getStatus() === 'paused') {
+            timer.continue();
             view({type: 'continue'});
-            isPause = false;
         } else {
             view({type: 'pause'});
             timer.pause();
-            isPause = true;
         }
     }
 }
 
-/**
- *  通过秒数，获取时钟，小时分钟秒，如果小时为0就不返回小时
- */
-function getClockTime(second) {
-    let ss = Math.floor(second % 60);
-    let mm = Math.floor(second / 60);
-    let hh = Math.floor(second / 3600);
-    return ((hh === 0) ? "" : hh.toString().padStart(2, '0') + ":") + mm.toString().padStart(2, '0') + ":" + ss.toString().padStart(2, '0');
-}
-
-
-function isFirstFrame() {
-    return $(firstFrameSelector).css('display') === 'block';
+function isShow(selector) {
+    return $(selector).css('display') === 'block';
 }
 
 function view({type, start, end}) {
-    if (type === 'work' || type === 'rest') {
+    if (type === work || type === rest) {
         if (start) {
-            $(taskBtnSelector).hide();
-            $(pauseBtnSelector).html('暂停');
-            if (type === 'work') {
-                $(timerDivSelector).html(getClockTime(workTime));
+            $(taskBtn).hide();
+            $(pauseBtn).html('暂停');
+            if (type === work) {
+                $(timerDiv).html(ReinforceTimer.formatTime(workTime));
                 if (mode === 'auto') {
-                    $(pauseBtnSelector).hide();
+                    $(pauseBtn).hide();
                 } else {
-                    $(pauseBtnSelector).show();
+                    $(pauseBtn).show();
                 }
-                $(taskBtnSelector).html("休息");
-                $(titleDivSelector).html("Working");
-            } else if (type === 'rest') {
-                $(timerDivSelector).html(getClockTime(restTime));
-                $(pauseBtnSelector).hide();
-                $(taskBtnSelector).html("工作");
-                $(titleDivSelector).html("Resting");
+                $(taskBtn).html("休息");
+                $(titleDiv).html("Working");
+            } else if (type === rest) {
+                $(timerDiv).html(ReinforceTimer.formatTime(restTime));
+                $(pauseBtn).hide();
+                $(taskBtn).html("工作");
+                $(titleDiv).html("Resting");
             }
         } else if (end) {
-            $(pauseBtnSelector).hide();
-            $(taskBtnSelector).show();
-            $(titleDivSelector).html('');
-            if (type === 'work') {
-                $(timerDivSelector).html('工作完成!');
-            } else if (type === 'rest') {
-                $(timerDivSelector).html("休息完成!");
+            $(pauseBtn).hide();
+            $(taskBtn).show();
+            $(titleDiv).html('');
+            if (type === work) {
+                $(timerDiv).html('工作完成!');
+            } else if (type === rest) {
+                $(timerDiv).html("休息完成!");
             }
         }
     } else if (type === 'pause') {
-        $(pauseBtnSelector).html("继续");
+        $(pauseBtn).html("继续");
     } else if (type === 'continue') {
-        $(pauseBtnSelector).html("暂停");
+        $(pauseBtn).html("暂停");
     } else if (type === 'first') {
-        $(secondFrameSelector).fadeOut();
-        $(firstFrameSelector).fadeIn();
+        $(secondFrame).fadeOut();
+        $(firstFrame).fadeIn();
     } else if (type === 'second') {
-        $(firstFrameSelector).fadeOut();
-        $(secondFrameSelector).fadeIn();
+        $(firstFrame).fadeOut();
+        $(secondFrame).fadeIn();
     }
 }
 
@@ -346,10 +356,10 @@ function initData() {
     restTime = db.get('profile.rest').value();
     theme = db.get('profile.theme').value();
     mode = db.get('profile.mode').value();
-    tomatoAllCount = db.get('tomatoCount.total').value();
+    tomatoTotalCount = db.get('tomatoCount.total').value();
 
     tomatoTodayCount = db.get('tomatoCount.today').value();
-    if (!isSameDay()) {
+    if (!today()) {
         tomatoTodayCount = db.set('tomatoCount.today', 0).write();
         tomatoTodayCount = 0;
     }
@@ -358,11 +368,11 @@ function initData() {
 }
 
 /**
- * 是否是同一天
+ * 判断更新今天番茄数是否是同一天
  */
-function isSameDay() {
+function today() {
     return getNowDate() ===
-        db.read().get('tomatoCount.todayUpdateTime').value();
+        db.read().get('tomatoCount.todayUpdateDate').value();
 }
 
 function getNowDate() {
@@ -406,15 +416,15 @@ function updateData({workHours, restHours, themePath, runMode}) {
 function updateViewData() {
     $("#theme").attr("href", path.join(targetThemeDir, theme, theme + ".css"));
 
-    $(themeInputSelector).val(theme);
-    $(workInputSelector).val(workTime / 60);
-    $(restInputSelector).val(restTime / 60);
-    $(tomatoAllCountSelector).html(tomatoAllCount);
-    $(tomatoTodayCountSelector).html(tomatoTodayCount);
+    $(themeInput).val(theme);
+    $(workInput).val(workTime / 60);
+    $(restInput).val(restTime / 60);
+    $(tomatoTotalCountSpan).html(tomatoTotalCount);
+    $(tomatoTodayCountSpan).html(tomatoTodayCount);
 
     if (mode === 'manual') {
-        $(manualModeSelector).attr('checked', 'checked');
+        $(manualModeRadio).attr('checked', 'checked');
     } else if (mode === 'auto') {
-        $(autoModeSelector).attr('checked', 'checked');
+        $(autoModeRadio).attr('checked', 'checked');
     }
 }
