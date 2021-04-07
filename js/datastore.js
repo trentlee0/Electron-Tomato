@@ -73,9 +73,14 @@ exports.getDb = function (APP) {
             "在今天和明天之间，有一段很长的时间；趁你还有精神的时候，学习迅速办事。——歌德",
             "光景不待人，须叟发成丝。——李白"
         ],
+        restTips: [
+            "起来走动一下!",
+            "活动活动脖子!",
+            "放松一下眼睛，眺望远处!"
+        ],
         startDateTime: getNowDate() + " " + twoNum(now.getHours()) + ":" + twoNum(now.getMinutes()),
         tomatoCount: {
-            todayUpdateTime: getNowDate(),
+            todayUpdateDate: getNowDate(),
             today: 0,
             week: 0,
             month: 0,
