@@ -60,14 +60,13 @@ function createWindow() {
     });
 
     win.once('ready-to-show', () => {
-        if (process.argv.indexOf("--openAsHidden") > 0) {
+        if (db.read().get('profile.mode').value() === 'auto') {
+            win.webContents.send('start-work-main');
+        }
+        if (process.argv.indexOf("--openAsHidden") >= 0) {
             win.hide();
-        } else {
-            if (db.read().get('profile.mode').value() === 'auto') {
-                win.webContents.send('start-work-main');
-            } else {
-                win.show();
-            }
+        } else if (db.read().get('profile.mode').value() === 'manual') {
+            win.show();
         }
     });
 }

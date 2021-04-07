@@ -391,12 +391,16 @@ function getNowDate() {
 function updateData({workHours, restHours, themePath, runMode}) {
     if (workHours != null && workHours > 0) {
         workHours = Math.floor(workHours);
+        if (remote.app.isPackaged)
+            if (workHours < 60) return;
         db.set('profile.work', workHours).write();
         workTime = workHours;
     }
 
     if (restHours != null && restHours > 0) {
         restHours = Math.floor(restHours);
+        if (remote.app.isPackaged)
+            if (restHours < 60) return;
         db.set('profile.rest', restHours).write();
         restTime = restHours;
     }
